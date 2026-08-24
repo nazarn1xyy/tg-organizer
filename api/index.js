@@ -29,4 +29,4 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
-export default app;
+export default (req, res) => app(req, res);
