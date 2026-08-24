@@ -1,16 +1,16 @@
 // ── Entry point: Express (Mini App + API) + Telegram bot ─────────
 import express from 'express';
 import path from 'node:path';
-import fs from 'node:fs';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import { webhookCallback } from 'grammy';
 import { createBot } from './bot.js';
 import { itemsApi } from './api.js';
 import { metaApi } from './api2.js';
 import { tgAuth } from './auth.js';
 import { startScheduler } from './scheduler.js';
 
-// Auto-load .env file if available
+// Auto-load .env file if available (locally)
 try {
   process.loadEnvFile?.();
 } catch (e) {
@@ -18,12 +18,6 @@ try {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Ensure data folder exists
-const dataDir = path.join(__dirname, '..', 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const PORT = Number(process.env.PORT || 7890);
@@ -62,8 +56,7 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '10mb' }));
 
-// ── Smart static file caching ──
-// Use ETag-based revalidation so updates are instantaneous
+// ── Static file serving ──
 const webappDir = path.join(__dirname, '..', 'webapp');
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-cache, must-revalidate');
@@ -74,8 +67,7 @@ app.use(express.static(webappDir, {
   lastModified: true,
 }));
 
-import { webhookCallback } from 'grammy';
-
+// Telegram Bot Webhook / Polling setup
 let bot = null;
 if (BOT_TOKEN) {
   try {
@@ -95,10 +87,6 @@ if (BOT_TOKEN) {
   } catch (err) {
     console.error('⚠️  Bot initialization error:', err.message);
   }
-} else {
-  console.log('ℹ️  BOT_TOKEN is not set in environment or .env.');
-  console.log('   Mini App and API are running in standalone/dev mode on http://localhost:' + PORT);
-  console.log('   To connect a Telegram bot, specify BOT_TOKEN in .env and restart.\n');
 }
 
 // API — protected by Telegram initData signature (or dev mode fallback)
