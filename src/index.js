@@ -34,10 +34,9 @@ app.use((req, res, next) => {
   function tryCompress(body, contentType) {
     if (!ae.includes('gzip')) return null;
     const raw = typeof body === 'string' ? body : JSON.stringify(body);
-    // Only compress responses larger than 1KB
     if (Buffer.byteLength(raw, 'utf8') < 1024) return null;
     try {
-      const compressed = zlib.gzipSync(raw, { level: 1 }); // fast compression
+      const compressed = zlib.gzipSync(raw, { level: 1 });
       res.setHeader('Content-Encoding', 'gzip');
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Length', compressed.length);
@@ -92,12 +91,18 @@ if (BOT_TOKEN) {
 // API — protected by Telegram initData signature (or dev mode fallback)
 app.use('/api', tgAuth(BOT_TOKEN), itemsApi(), metaApi());
 
-let server = null;
-if (!process.env.VERCEL) {
-  server = app.listen(PORT, '0.0.0.0', () => {
+// Serve index.html for root or non-API routes
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) return next();
+  res.sendFile(path.join(webappDir, 'index.html'));
+});
+
+// Start HTTP listener if not purely serverless lambda without PORT
+if (!process.env.VERCEL || process.env.PORT) {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 Telegram Mini App + API running on http://localhost:${PORT}`);
   });
 }
 
 export default app;
-export { app, server, bot };
+export { app, bot };
