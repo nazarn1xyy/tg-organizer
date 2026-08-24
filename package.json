@@ -1,0 +1,16 @@
+{
+  "name": "tg-organizer",
+  "version": "1.0.0",
+  "description": "Personal organizer: Telegram bot + Mini App with shared SQLite DB",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node test/verify.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.4",
+    "better-sqlite3": "^11.3.0",
+    "express": "^4.19.2",
+    "grammy": "^1.30.0"
+  }
+}
