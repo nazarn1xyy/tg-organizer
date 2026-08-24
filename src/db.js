@@ -3,8 +3,11 @@ import { createClient } from '@libsql/client/web';
 
 try { process.loadEnvFile?.(); } catch {}
 
-const url = process.env.TURSO_DATABASE_URL || 'libsql://tg-organizer-n1xyy.aws-eu-west-1.turso.io';
-const authToken = process.env.TURSO_AUTH_TOKEN || undefined;
+const rawUrl = process.env.TURSO_DATABASE_URL ? String(process.env.TURSO_DATABASE_URL).trim() : '';
+const rawToken = process.env.TURSO_AUTH_TOKEN ? String(process.env.TURSO_AUTH_TOKEN).trim() : '';
+
+const url = rawUrl || 'libsql://tg-organizer-n1xyy.aws-eu-west-1.turso.io';
+const authToken = rawToken || undefined;
 
 export const client = createClient({ url, authToken });
 

@@ -8,8 +8,8 @@ import { tgAuth } from '../src/auth.js';
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-const BOT_TOKEN = process.env.BOT_TOKEN || '';
-const WEBAPP_URL = process.env.WEBAPP_URL || '';
+const BOT_TOKEN = (process.env.BOT_TOKEN || '').trim();
+const WEBAPP_URL = (process.env.WEBAPP_URL || '').trim();
 
 let bot = null;
 if (BOT_TOKEN) {

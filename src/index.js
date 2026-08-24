@@ -19,9 +19,9 @@ try {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const BOT_TOKEN = process.env.BOT_TOKEN || '';
+const BOT_TOKEN = (process.env.BOT_TOKEN || '').trim();
 const PORT = Number(process.env.PORT || 7890);
-const WEBAPP_URL = process.env.WEBAPP_URL || `http://localhost:${PORT}`;
+const WEBAPP_URL = (process.env.WEBAPP_URL || `http://localhost:${PORT}`).trim();
 
 const app = express();
 
