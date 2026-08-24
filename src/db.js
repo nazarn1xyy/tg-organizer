@@ -1,13 +1,9 @@
-// ── Turso / LibSQL database client (Cloud & Local) ────────────────
-import { createClient } from '@libsql/client';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+// ── Turso / LibSQL database client (Cloud Pure JS / Web Fetch) ─────
+import { createClient } from '@libsql/client/web';
 
 try { process.loadEnvFile?.(); } catch {}
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const url = process.env.TURSO_DATABASE_URL || `file:${path.join(__dirname, '..', 'data', 'organizer.db')}`;
+const url = process.env.TURSO_DATABASE_URL || 'libsql://tg-organizer-n1xyy.aws-eu-west-1.turso.io';
 const authToken = process.env.TURSO_AUTH_TOKEN || undefined;
 
 export const client = createClient({ url, authToken });
