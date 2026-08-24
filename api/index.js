@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 
 const BOT_TOKEN = (process.env.BOT_TOKEN || '').trim();
-const WEBAPP_URL = (process.env.WEBAPP_URL || '').trim();
+const WEBAPP_URL = (process.env.WEBAPP_URL || 'https://tg-organizer.vercel.app').trim();
 
 let bot = null;
 if (BOT_TOKEN) {
