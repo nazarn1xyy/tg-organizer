@@ -656,160 +656,210 @@ async function loadDayItems(dateStr) {
 }
 
 /* ── Profile Screen ─────────────────────────────────────────── */
-async function renderProfile() {
+let _cachedStats = null;
+
+function renderProfileStats(s = _cachedStats) {
+  const statsEl = $('#stats');
+  if (!statsEl) return;
+  const val = (v, fallback = '—') => (v !== undefined && v !== null ? v : fallback);
+  const tasksRatio = s ? `${val(s.tasks_done, 0)}/${val(s.tasks, 0)}` : '—';
+
+  statsEl.innerHTML = `
+    <div class="card glass stat">
+      <div class="s-num">${s ? val(s.notes, 0) : '—'}</div>
+      <div class="s-lbl">${IC.noteSmall} <span>Заметки</span></div>
+    </div>
+    <div class="card glass stat">
+      <div class="s-num">${s ? val(s.quotes, 0) : '—'}</div>
+      <div class="s-lbl">${IC.quoteSmall} <span>Цитаты</span></div>
+    </div>
+    <div class="card glass stat">
+      <div class="s-num">${tasksRatio}</div>
+      <div class="s-lbl">${IC.checkSmall} <span>Задачи решено</span></div>
+    </div>
+    <div class="card glass stat">
+      <div class="s-num">${s ? val(s.reminders_active, 0) : '—'}</div>
+      <div class="s-lbl">${IC.bellSmall} <span>Напоминания</span></div>
+    </div>
+    <div class="card glass stat">
+      <div class="s-num">${s ? val(s.today, 0) : '—'}</div>
+      <div class="s-lbl">${IC.calendarSmall} <span>Создано сегодня</span></div>
+    </div>
+    <div class="card glass stat">
+      <div class="s-num">${s ? val(s.week, 0) : '—'}</div>
+      <div class="s-lbl">${IC.chartSmall} <span>За 7 дней</span></div>
+    </div>
+    <div class="card glass stat">
+      <div class="s-num">${s ? val(s.month, 0) : '—'}</div>
+      <div class="s-lbl">${IC.monthSmall} <span>За 30 дней</span></div>
+    </div>
+    <div class="card glass stat">
+      <div class="s-num" style="display:flex;align-items:center;gap:6px">${IC.fire} <span>${s ? val(s.streak, 0) : '—'}</span></div>
+      <div class="s-lbl"><span>Серия активности (дней)</span></div>
+    </div>`;
+}
+
+async function renderProfile(retryCount = 0) {
   const u = tg.initDataUnsafe?.user || { id: 1, first_name: 'Пользователь', username: 'developer' };
   const initials = ((u.first_name?.[0] || '') + (u.last_name?.[0] || '')).toUpperCase() || 'U';
 
-  $('#profileCard').innerHTML = `
-    <div class="p-avatar">${initials}</div>
-    <div>
-      <div class="p-name">${esc(u.first_name)} ${esc(u.last_name || '')}</div>
-      <div class="p-user">${u.username ? '@' + esc(u.username) : 'ID: ' + u.id}</div>
-    </div>`;
+  const pCard = $('#profileCard');
+  if (pCard) {
+    pCard.innerHTML = `
+      <div class="p-avatar">${initials}</div>
+      <div>
+        <div class="p-name">${esc(u.first_name)} ${esc(u.last_name || '')}</div>
+        <div class="p-user">${u.username ? '@' + esc(u.username) : 'ID: ' + u.id}</div>
+      </div>`;
+  }
 
+  // 1. Immediately render stats from cache / skeleton
+  renderProfileStats();
+
+  // 2. Fetch fresh stats in background
   try {
     const s = await GET('/stats');
-    $('#stats').innerHTML = `
-      <div class="card glass stat">
-        <div class="s-num">${s.notes}</div>
-        <div class="s-lbl">${IC.noteSmall} <span>Заметки</span></div>
-      </div>
-      <div class="card glass stat">
-        <div class="s-num">${s.quotes}</div>
-        <div class="s-lbl">${IC.quoteSmall} <span>Цитаты</span></div>
-      </div>
-      <div class="card glass stat">
-        <div class="s-num">${s.tasks_done}/${s.tasks}</div>
-        <div class="s-lbl">${IC.checkSmall} <span>Задачи решено</span></div>
-      </div>
-      <div class="card glass stat">
-        <div class="s-num">${s.reminders_active}</div>
-        <div class="s-lbl">${IC.bellSmall} <span>Напоминания</span></div>
-      </div>
-      <div class="card glass stat">
-        <div class="s-num">${s.today}</div>
-        <div class="s-lbl">${IC.calendarSmall} <span>Создано сегодня</span></div>
-      </div>
-      <div class="card glass stat">
-        <div class="s-num">${s.week}</div>
-        <div class="s-lbl">${IC.chartSmall} <span>За 7 дней</span></div>
-      </div>
-      <div class="card glass stat">
-        <div class="s-num">${s.month}</div>
-        <div class="s-lbl">${IC.monthSmall} <span>За 30 дней</span></div>
-      </div>
-      <div class="card glass stat">
-        <div class="s-num" style="display:flex;align-items:center;gap:6px">${IC.fire} <span>${s.streak}</span></div>
-        <div class="s-lbl"><span>Серия активности (дней)</span></div>
-      </div>`;
+    if (s) {
+      _cachedStats = s;
+      renderProfileStats(s);
+    }
   } catch (e) {
-    $('#stats').innerHTML = '<div class="empty">Не удалось загрузить статистику</div>';
+    console.error('renderProfile error:', e);
+    if (retryCount < 3) {
+      setTimeout(() => renderProfile(retryCount + 1), (retryCount + 1) * 300);
+    }
   }
 }
 
 /* ── Settings Screen ────────────────────────────────────────── */
-async function renderSettings() {
+let _cachedSettings = {
+  has_pin: false,
+  autolock_minutes: 0,
+  quote_of_day: false,
+  default_section: 'note',
+};
+
+function renderSettingsUI(s = _cachedSettings) {
   const setSecurity = $('#setSecurity');
   const setBot = $('#setBot');
   const setData = $('#setData');
   if (!setSecurity || !setBot || !setData) return;
 
+  _cachedSettings = { ..._cachedSettings, ...(s || {}) };
+  const current = _cachedSettings;
+
+  // 1. Security
+  setSecurity.innerHTML = `
+    <div class="set-row" id="pinRow">
+      <div class="s-name">${IC.lock} <span>PIN-код защиты</span></div>
+      <div class="s-val">${current.has_pin ? 'Включен' : 'Выключен'} &rsaquo;</div>
+    </div>
+    <div class="set-row" id="autolockRow">
+      <div class="s-name">${IC.shield} <span>Автоблокировка</span></div>
+      <div class="s-val">${current.autolock_minutes > 0 ? current.autolock_minutes + ' мин' : 'Сразу'} &rsaquo;</div>
+    </div>`;
+
+  // 2. Bot Settings
+  setBot.innerHTML = `
+    <div class="set-row">
+      <div class="s-name">${IC.bot} <span>Цитата дня в 09:00</span></div>
+      <div class="tgl ${current.quote_of_day ? 'on' : ''}" id="tglQuote"></div>
+    </div>
+    <div class="set-row" id="defSectionRow">
+      <div class="s-name"><span>Пересылать сообщения в</span></div>
+      <div class="s-val">${current.default_section === 'task' ? 'Задачи' : 'Заметки'} &rsaquo;</div>
+    </div>`;
+
+  // 3. Data & Backup
+  setData.innerHTML = `
+    <div class="set-row" id="exportJsonRow">
+      <div class="s-name">${IC.download} <span>Резервная копия (JSON)</span></div>
+      <div class="s-val">Скачать &rsaquo;</div>
+    </div>
+    <div class="set-row" id="exportMdRow">
+      <div class="s-name">${IC.download} <span>Экспорт в Markdown (.md)</span></div>
+      <div class="s-val">Скачать &rsaquo;</div>
+    </div>
+    <div class="set-row" id="exportTxtRow">
+      <div class="s-name">${IC.download} <span>Экспорт в TXT</span></div>
+      <div class="s-val">Скачать &rsaquo;</div>
+    </div>
+    <div class="set-row" id="importRow">
+      <div class="s-name">${IC.upload} <span>Восстановить из JSON</span></div>
+      <div class="s-val">Загрузить &rsaquo;</div>
+    </div>
+    <div class="set-row" id="cleanTrashRow" style="color:var(--danger)">
+      <div class="s-name">${IC.trash} <span>Очистить корзину</span></div>
+      <div class="s-val" style="color:var(--danger)">Очистить &rsaquo;</div>
+    </div>`;
+
+  // Event Listeners
+  $('#tglQuote')?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const on = !$('#tglQuote').classList.contains('on');
+    $('#tglQuote').classList.toggle('on', on);
+    _cachedSettings.quote_of_day = on;
+    await POST('/settings', { quote_of_day: on });
+    haptic();
+  });
+
+  $('#defSectionRow')?.addEventListener('click', async () => {
+    const next = current.default_section === 'task' ? 'note' : 'task';
+    _cachedSettings.default_section = next;
+    renderSettingsUI(_cachedSettings);
+    await POST('/settings', { default_section: next });
+    haptic();
+  });
+
+  $('#autolockRow')?.addEventListener('click', async () => {
+    const val = prompt('Автоблокировка через (минут, 0 = сразу):', current.autolock_minutes);
+    if (val !== null && !isNaN(Number(val))) {
+      const minutes = Math.max(0, Number(val));
+      _cachedSettings.autolock_minutes = minutes;
+      renderSettingsUI(_cachedSettings);
+      await POST('/settings', { autolock_minutes: minutes });
+    }
+  });
+
+  $('#pinRow')?.addEventListener('click', () => openPinWizard(current.has_pin));
+
+  $('#exportJsonRow')?.addEventListener('click', () => triggerExport('json'));
+  $('#exportMdRow')?.addEventListener('click', () => triggerExport('md'));
+  $('#exportTxtRow')?.addEventListener('click', () => triggerExport('txt'));
+
+  $('#importRow')?.addEventListener('click', () => {
+    const inp = $('#importFileInput');
+    if (inp) {
+      inp.value = '';
+      inp.click();
+    }
+  });
+
+  $('#cleanTrashRow')?.addEventListener('click', async () => {
+    if (confirm('Удалить навсегда все записи из корзины?')) {
+      await DEL('/trash');
+      showToast('Корзина очищена');
+      hapticNotif('success');
+    }
+  });
+}
+
+async function renderSettings(retryCount = 0) {
+  // 1. Immediately render with cached/default settings
+  renderSettingsUI();
+
+  // 2. Fetch fresh settings from server in background
   try {
     const s = await GET('/settings');
-
-    // 1. Security
-    setSecurity.innerHTML = `
-      <div class="set-row" id="pinRow">
-        <div class="s-name">${IC.lock} <span>PIN-код защиты</span></div>
-        <div class="s-val">${s.has_pin ? 'Включен' : 'Выключен'} &rsaquo;</div>
-      </div>
-      <div class="set-row" id="autolockRow">
-        <div class="s-name">${IC.shield} <span>Автоблокировка</span></div>
-        <div class="s-val">${s.autolock_minutes > 0 ? s.autolock_minutes + ' мин' : 'Сразу'} &rsaquo;</div>
-      </div>`;
-
-    // 2. Bot Settings
-    setBot.innerHTML = `
-      <div class="set-row">
-        <div class="s-name">${IC.bot} <span>Цитата дня в 09:00</span></div>
-        <div class="tgl ${s.quote_of_day ? 'on' : ''}" id="tglQuote"></div>
-      </div>
-      <div class="set-row" id="defSectionRow">
-        <div class="s-name"><span>Пересылать сообщения в</span></div>
-        <div class="s-val">${s.default_section === 'task' ? 'Задачи' : 'Заметки'} &rsaquo;</div>
-      </div>`;
-
-    // 3. Data & Backup
-    setData.innerHTML = `
-      <div class="set-row" id="exportJsonRow">
-        <div class="s-name">${IC.download} <span>Резервная копия (JSON)</span></div>
-        <div class="s-val">Скачать &rsaquo;</div>
-      </div>
-      <div class="set-row" id="exportMdRow">
-        <div class="s-name">${IC.download} <span>Экспорт в Markdown (.md)</span></div>
-        <div class="s-val">Скачать &rsaquo;</div>
-      </div>
-      <div class="set-row" id="exportTxtRow">
-        <div class="s-name">${IC.download} <span>Экспорт в TXT</span></div>
-        <div class="s-val">Скачать &rsaquo;</div>
-      </div>
-      <div class="set-row" id="importRow">
-        <div class="s-name">${IC.upload} <span>Восстановить из JSON</span></div>
-        <div class="s-val">Загрузить &rsaquo;</div>
-      </div>
-      <div class="set-row" id="cleanTrashRow" style="color:var(--danger)">
-        <div class="s-name">${IC.trash} <span>Очистить корзину</span></div>
-        <div class="s-val" style="color:var(--danger)">Очистить &rsaquo;</div>
-      </div>`;
-
-    // Listeners
-    $('#tglQuote')?.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const on = !$('#tglQuote').classList.contains('on');
-      $('#tglQuote').classList.toggle('on', on);
-      await POST('/settings', { quote_of_day: on });
-      haptic();
-    });
-
-    $('#defSectionRow')?.addEventListener('click', async () => {
-      const next = s.default_section === 'task' ? 'note' : 'task';
-      await POST('/settings', { default_section: next });
-      renderSettings();
-      haptic();
-    });
-
-    $('#autolockRow')?.addEventListener('click', async () => {
-      const val = prompt('Автоблокировка через (минут, 0 = сразу):', s.autolock_minutes);
-      if (val !== null && !isNaN(Number(val))) {
-        await POST('/settings', { autolock_minutes: Math.max(0, Number(val)) });
-        renderSettings();
-      }
-    });
-
-    $('#pinRow')?.addEventListener('click', () => openPinWizard(s.has_pin));
-
-    $('#exportJsonRow')?.addEventListener('click', () => triggerExport('json'));
-    $('#exportMdRow')?.addEventListener('click', () => triggerExport('md'));
-    $('#exportTxtRow')?.addEventListener('click', () => triggerExport('txt'));
-
-    $('#importRow')?.addEventListener('click', () => {
-      const inp = $('#importFileInput');
-      if (inp) {
-        inp.value = '';
-        inp.click();
-      }
-    });
-
-    $('#cleanTrashRow')?.addEventListener('click', async () => {
-      if (confirm('Удалить навсегда все записи из корзины?')) {
-        await DEL('/trash');
-        showToast('Корзина очищена');
-        hapticNotif('success');
-      }
-    });
-
+    if (s) {
+      _cachedSettings = s;
+      renderSettingsUI(s);
+    }
   } catch (e) {
-    console.error(e);
+    console.error('renderSettings error:', e);
+    if (retryCount < 3) {
+      setTimeout(() => renderSettings(retryCount + 1), (retryCount + 1) * 300);
+    }
   }
 }
 
@@ -1533,9 +1583,11 @@ async function openItemSheet(id, opts = {}) {
 
 /* ── App Initialization ─────────────────────────────────────── */
 async function initApp() {
-  // 1. Instantly render structure so UI is never blank
+  // 1. Instantly render structure for all 3 tabs so UI is immediately visible
   renderSectionTiles();
   renderCalendar();
+  renderProfile();
+  renderSettings();
 
   // 2. Attach section click delegation once
   $('#sections')?.addEventListener('click', _handleSectionClick);
