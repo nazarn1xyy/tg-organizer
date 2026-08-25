@@ -72,12 +72,14 @@ async function api(path, opts = {}) {
     return _inflightRequests.get(cacheKey);
   }
 
+  const currentInitData = window.Telegram?.WebApp?.initData || tg.initData || 'dev';
+
   const promise = (async () => {
     const res = await fetch('/api' + path, {
       ...opts,
       headers: {
         'Content-Type': 'application/json',
-        'X-Tg-Init-Data': tg.initData || 'dev',
+        'X-Tg-Init-Data': currentInitData,
         'Accept-Encoding': 'gzip',
         ...(opts.headers || {}),
       },
@@ -282,10 +284,24 @@ const SECTIONS = [
   { key: 'trash', name: 'Корзина', icon: IC.trash },
 ];
 
+let _lastStatsCounts = {};
+
+function renderSectionTiles(counts = _lastStatsCounts) {
+  const el = $('#sections');
+  if (!el) return;
+  _lastStatsCounts = counts;
+  el.innerHTML = SECTIONS.map((s) => `
+    <div class="tile glass" data-sec="${s.key}">
+      ${s.icon}
+      <div class="t-name">${s.name}</div>
+      <div class="t-count">${counts[s.key] !== undefined && counts[s.key] !== null ? counts[s.key] : '—'}</div>
+    </div>`).join('');
+}
+
 // ── Parallel data loading for home screen ──
 let _lastCalMonth = null;
 
-async function refreshHome() {
+async function refreshHome(retryCount = 0) {
   const pad = (n) => String(n).padStart(2, '0');
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
@@ -298,29 +314,27 @@ async function refreshHome() {
       _lastCalMonth !== currentMonth
         ? GET(`/calendar/${currentMonth}`).then(counts => {
             _calendarCountsCache = {};
-            counts.forEach((c) => _calendarCountsCache[c.date] = c.count);
+            (counts || []).forEach((c) => _calendarCountsCache[c.date] = c.count);
             _lastCalMonth = currentMonth;
           })
         : Promise.resolve(),
     ]);
 
-    const counts = {
-      note: stats.notes,
-      quote: stats.quotes,
-      task: stats.tasks,
-      reminder: stats.reminders_active,
-    };
-    $('#sections').innerHTML = SECTIONS.map((s) => `
-      <div class="tile glass" data-sec="${s.key}">
-        ${s.icon}
-        <div class="t-name">${s.name}</div>
-        <div class="t-count">${counts[s.key] !== undefined ? counts[s.key] : ''}</div>
-      </div>`).join('');
-
-    // Event delegation for section tiles
-    $('#sections').addEventListener('click', _handleSectionClick);
+    if (stats) {
+      const counts = {
+        note: stats.notes,
+        quote: stats.quotes,
+        task: stats.tasks,
+        reminder: stats.reminders_active,
+      };
+      renderSectionTiles(counts);
+    }
   } catch (e) {
     console.error('refreshHome error:', e);
+    // Auto-retry up to 3 times if initial request failed
+    if (retryCount < 3) {
+      setTimeout(() => refreshHome(retryCount + 1), (retryCount + 1) * 300);
+    }
   }
   renderCalendar();
 }
@@ -1519,8 +1533,18 @@ async function openItemSheet(id, opts = {}) {
 
 /* ── App Initialization ─────────────────────────────────────── */
 async function initApp() {
-  await checkPinLock();
-  refreshHome();
+  // 1. Instantly render structure so UI is never blank
+  renderSectionTiles();
+  renderCalendar();
+
+  // 2. Attach section click delegation once
+  $('#sections')?.addEventListener('click', _handleSectionClick);
+
+  // 3. Concurrently check PIN and fetch live data
+  Promise.all([
+    checkPinLock(),
+    refreshHome(),
+  ]).catch(console.error);
 }
 
 initApp();
